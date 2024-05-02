@@ -71,8 +71,10 @@ class LCD12864(framebuf.FrameBuffer):
                 self.set_address(8*j, i)
                 self.write_data(bytearray(self._bufmv[(512 * j) + i * 16 : (512 * j) + (16 + i * 16)]))
 
-
 # Test
+
+import time
+
 if __name__ == '__main__':
     
     spi = SPI(1, baudrate=1_000_000, sck=Pin(14, Pin.OUT), mosi=Pin(15, Pin.OUT), miso=Pin(12, Pin.IN))
@@ -81,19 +83,29 @@ if __name__ == '__main__':
     print(fbuf._spi)
     fbuf.fill(0)
 
-    #fbuf.text('Hello world!', 0, 0, 1)
-    fbuf.ellipse(64, 31, 32, 16, 1, True)
-    fbuf.ellipse(64, 31, 16, 32, 1, True)
+    while True:
+        fbuf.fill(0)
+        fbuf.text('Hello!', 32, 32, 1)
+        fbuf.show()
+        time.sleep(1)
+        fbuf.fill(0)
+        fbuf.text('world!', 32, 32, 1)
+        fbuf.show()
+        time.sleep(1)
     
-    fbuf.ellipse(64, 31, 22, 22, 1, True)
+    # fbuf.text('Hello world!', 0, 0, 1)
+    # fbuf.ellipse(64, 31, 32, 16, 1, True)
+    # fbuf.ellipse(64, 31, 16, 32, 1, True)
     
-    fbuf.ellipse(64, 31, 30, 14, 0, True)
-    fbuf.ellipse(64, 31, 14, 30, 0, True)
-    fbuf.ellipse(64, 31, 28, 12, 1, True)
-    fbuf.ellipse(64, 31, 12, 28, 1, True)
+    # fbuf.ellipse(64, 31, 22, 22, 1, True)
     
-    fbuf.ellipse(64, 31, 15, 15, 0, True)
-    fbuf.ellipse(64, 31, 10, 10, 1, True)
-    fbuf.ellipse(64, 31, 5, 5, 0, True)
+    # fbuf.ellipse(64, 31, 30, 14, 0, True)
+    # fbuf.ellipse(64, 31, 14, 30, 0, True)
+    # fbuf.ellipse(64, 31, 28, 12, 1, True)
+    # fbuf.ellipse(64, 31, 12, 28, 1, True)
+    
+    # fbuf.ellipse(64, 31, 15, 15, 0, True)
+    # fbuf.ellipse(64, 31, 10, 10, 1, True)
+    # fbuf.ellipse(64, 31, 5, 5, 0, True)
 
-    fbuf.show()
+    # fbuf.show()

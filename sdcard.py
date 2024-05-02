@@ -320,18 +320,18 @@ if __name__ == '__main__':
     
     # Initialize SD card
     sd = SDCard(spi, cs)
-    
+
     # Mount filesystem
     vfs = uos.VfsFat(sd)
     uos.mount(vfs, "/sd")
-    
+
     # Create a file and write something to it
-    with open("/sd/test01.txt", "w") as file:
-        file.write("Hello world!\r\n")
+    with open("/sd/test02.txt", "w") as file:
+        file.write("Hello world!!!\r\n")
         file.write("This is a test\r\n")
-    
+
     # Open the file we just created and read from it
-    with open("/sd/test01.txt", "r") as file:
+    with open("/sd/test02.txt", "r") as file:
         data = file.read()
         print(data)
 

@@ -486,7 +486,7 @@ class MFRC522:
 import utime
 
 if __name__ == '__main__':
-    reader = MFRC522(spi_id=0,sck=2,miso=4,mosi=3,cs=1,rst=0)
+    reader = MFRC522(spi_id=0,sck=2,miso=0,mosi=3,cs=1,rst=10)
 
     print("Bring TAG closer...")
     print("")

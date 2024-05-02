@@ -12,7 +12,7 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 
 ## Hardware
 
-- Raspberry Pi Pico W
+- Raspberry Pi Pico W (RP2040)
 - LCD Screen 128x64 ST7920
 - RFID module MFRC522
 - MicroSD card module
@@ -21,7 +21,7 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 
 ## Software
 
-- MicroPython
+- MicroPython v1.22.2
 - MicroPico VSCode extension
 
 ## Connections
