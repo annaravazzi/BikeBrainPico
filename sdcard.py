@@ -1,8 +1,11 @@
+'''
+MicroPython module to manage the microSD card, using SPI interface.
+Original source: https://github.com/micropython/micropython-lib/blob/master/micropython/drivers/storage/sdcard/sdcard.py
+'''
+
+
 """
 MicroPython driver for SD cards using SPI bus.
- 
-Origial: https://github.com/micropython/micropython/tree/master/drivers/sdcard
-RAW: https://raw.githubusercontent.com/micropython/micropython/master/drivers/sdcard/sdcard.py
  
 Requires an SPI bus and a CS pin.  Provides readblocks and writeblocks
 methods so the device can be mounted as a filesystem.

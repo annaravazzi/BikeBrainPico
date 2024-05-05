@@ -1,7 +1,8 @@
 '''
-Micropython driver for the LCD 128x64 display, commanded by the ST7920 controller, using SPI interface.
+MicroPython module to manage the LCD 128x64 display, commanded by the ST7920 controller, using SPI interface.
 Original source: https://gist.github.com/phoreglad/ca01e9b66ff76abdb2e098ad47130921
 '''
+
 
 from machine import Pin, SPI
 import framebuf

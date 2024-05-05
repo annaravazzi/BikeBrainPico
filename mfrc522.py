@@ -1,5 +1,5 @@
 '''
-Micropython driver for the MFRC522 RFID module, using SPI interface.
+MicroPython module to manage the MFRC522 RFID reader, using SPI interface.
 Original source: https://github.com/danjperron/micropython-mfrc522/blob/master/mfrc522.py
 '''
 

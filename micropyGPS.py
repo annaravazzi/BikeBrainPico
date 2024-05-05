@@ -1,5 +1,5 @@
 '''
-Micropython driver for the Neo-6m GPS module, using NMEA protocol and UART interface.
+MicroPython module to manage the GPS NEO-6M module, using NMEA protocol and UART interface.
 Original source: https://github.com/inmcm/micropyGPS/blob/master/micropyGPS.py
 '''
 
