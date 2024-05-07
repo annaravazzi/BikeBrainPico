@@ -1,15 +1,16 @@
-import lcd12864
-import mfrc522
-import micropyGPS
-import sdcard
-from ble_simple_peripheral import BLESimplePeripheral
-
+import lib.lcd12864 as lcd12864
+import lib.mfrc522 as mfrc522
+import lib.micropyGPS as micropyGPS
+import lib.sdcard as sdcard
+import lib.sim800l as sim800l
+from lib.ble_simple_peripheral import BLESimplePeripheral
 import bluetooth
 from machine import Pin, SPI, UART
 import time
 import uos
 
 CARD_ID = 3186880355
+NUMBER = "+5541992130234"
 
 # Pins
 LCD_SCK = 14
@@ -26,6 +27,8 @@ SD_SCK = 6
 SD_MISO = 4
 SD_MOSI = 7
 SD_CS = 5
+SIM_RX = 17
+SIM_TX = 16
 BUTTON_PIN = 28
 
 # States: idle, running, paused, saving
@@ -73,6 +76,10 @@ def init_BLE ():
     ble = bluetooth.BLE()
     sp = BLESimplePeripheral(ble)
     return sp
+
+def init_SIM800L ():
+    sim_card = sim800l.SIM800(0, uart_rx=Pin(SIM_RX), uart_tx=Pin(SIM_TX), baud=115200)
+    return sim_card
 
 def rfid_read (rfid, CARD_ID):
     rfid.init()
@@ -145,6 +152,14 @@ def send_data_BLE (sp, data):
         return True
     return False
 
+def send_sms (sim800l, message, number):
+    # set sms format (text)
+    sim800l.send_command(f'AT+CMGF={"1"}')
+    # send sms
+    sim800l.send_command("AT+CMGS=\"" + number + "\"")
+    sim800l.uart.write(message + chr(26))
+    
+
 # Main
 
 # Initialize peripherals
@@ -158,6 +173,8 @@ sd = init_SD()
 vfs = uos.VfsFat(sd)
 
 sp = init_BLE()
+
+sim_card = init_SIM800L()
 
 led = Pin('LED', Pin.OUT, value=0)
 button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
@@ -182,6 +199,9 @@ while True:
 
     # Check if button was pressed to start running
     if button.value() == 0:
+        
+        send_sms(sim_card, "Program started running", NUMBER)
+
         t_button = time.ticks_ms()  # Debouncing
 
         # Initialize chronometer
@@ -204,6 +224,7 @@ while True:
             if t_current - t_button > 500:  # Debouncing
                 t_button = time.ticks_ms()
                 state = 'saving'    # Update state
+                send_sms(sim_card, "Program stopped running", NUMBER)
                 break
 
         if t_current - t_rfid > 500:    # Debouncing
