@@ -1,6 +1,6 @@
 '''
 MicroPython module to manage the GPS NEO-6M module, using NMEA protocol and UART interface.
-Original source: https://github.com/inmcm/micropyGPS/blob/master/micropyGPS.py
+Adapted from: https://github.com/inmcm/micropyGPS/blob/master/micropyGPS.py
 '''
 
 """
@@ -833,6 +833,18 @@ class MicropyGPS(object):
                            'GNGSA': gpgsa,
                           }
     
+    def time_string(self):
+        """
+        Create a readable string of the current time data
+        :return: string
+        """
+        hours = str(self.timestamp[0])
+        minutes = str(self.timestamp[1])
+        if len(hours) == 1:
+            hours = "0" + hours
+        if len(minutes) == 1:
+            minutes = "0" + minutes
+        return hours + ':' + minutes
 
 def convert_coordinates(sections):
     if sections[0] == 0:  # sections[0] contains the degrees
@@ -851,7 +863,7 @@ def convert_coordinates(sections):
     return str(data)
     
 
-def get_data (gps, gps_module):
+def get_data (gps, gps_module, speed_unit='kph'):
     length = gps_module.any()
     if length > 0:
         data = gps_module.read(length)
@@ -860,10 +872,13 @@ def get_data (gps, gps_module):
 
     latitude = convert_coordinates(gps.latitude)
     longitude = convert_coordinates(gps.longitude)
+    speed = (gps.speed[2] if speed_unit == 'kph' else gps.speed[1] if speed_unit == 'mph' else gps.speed[0])
+    date = gps.date_string(formatting='s_dmy')
+    time = gps.time_string()
 
-    if latitude is None or longitude is None:
+    if latitude is None or longitude is None or speed is None or date is None or time is None:
         return None
-    return latitude, longitude, gps.speed[2]
+    return latitude, longitude, speed, date, time
 
 # Test
 
@@ -907,5 +922,8 @@ if __name__ == "__main__":
         print('Lat: ' + latitude)
         print('Lon: ' + longitude)
         print('Speed: ' + str(gps.speed[2]) + ' km/h')
+        print(gps.date_string(formatting='s_dmy'))
+        print(gps.time_string())
+        print(time.gmtime())
 
         utime.sleep_ms(1000)  # Add a 100ms delay between GPS updates

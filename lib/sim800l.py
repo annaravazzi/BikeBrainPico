@@ -51,3 +51,12 @@ class SIM800:
         Resets the SIM800 module.
         """
         self.send_command('AT+CFUN=1,1')  # Reset the module
+
+# Main
+
+from machine import Pin
+
+if __name__ == "__main__":
+    sim_card = SIM800(0, uart_rx=Pin(17), uart_tx=Pin(16), baud=115200)
+    response = sim_card.send_command("AT+CREG?")
+    print(response)
