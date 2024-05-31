@@ -908,6 +908,8 @@ if __name__ == "__main__":
     #     return str(data)
 
     while True:
+        # print(gps_module.read())
+        # utime.sleep_ms(1000)
         length = gps_module.any()
         if length > 0:
             data = gps_module.read(length)
@@ -924,6 +926,6 @@ if __name__ == "__main__":
         print('Speed: ' + str(gps.speed[2]) + ' km/h')
         print(gps.date_string(formatting='s_dmy'))
         print(gps.time_string())
-        print(time.gmtime())
+        #print(time.gmtime())
 
         utime.sleep_ms(1000)  # Add a 100ms delay between GPS updates

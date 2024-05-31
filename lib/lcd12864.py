@@ -78,7 +78,7 @@ import time
 
 if __name__ == '__main__':
     
-    spi = SPI(1, baudrate=1_000_000, sck=Pin(14, Pin.OUT), mosi=Pin(15, Pin.OUT), miso=Pin(12, Pin.IN))
+    spi = SPI(1, baudrate=1_000_000, sck=Pin(14, Pin.OUT), mosi=Pin(15, Pin.OUT))
     cs = Pin(13, Pin.OUT, value=0)
     fbuf = LCD12864(spi, cs)
     print(fbuf._spi)

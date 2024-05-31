@@ -34,14 +34,18 @@ class DHT11:
             # to the datasheet
             return
  
-        self._send_init_signal()
-        pulses = self._capture_pulses()
-        buffer = self._convert_pulses_to_buffer(pulses)
-        self._verify_checksum(buffer)
- 
-        self._humidity = buffer[0] + buffer[1] / 10
-        self._temperature = buffer[2] + buffer[3] / 10
-        self._last_measure = utime.ticks_us()
+        try:
+            self._send_init_signal()
+            pulses = self._capture_pulses()
+            buffer = self._convert_pulses_to_buffer(pulses)
+            self._verify_checksum(buffer)
+    
+            self._humidity = buffer[0] + buffer[1] / 10
+            self._temperature = buffer[2] + buffer[3] / 10
+            self._last_measure = utime.ticks_us()
+        except:
+            self._temperature = -1
+            self._humidity = -1
  
     @property
     def humidity(self):
@@ -120,3 +124,16 @@ class DHT11:
             checksum += buf
         if checksum & 0xFF != buffer[4]:
             raise InvalidChecksum()
+        
+import time
+
+if __name__ == "__main__":
+
+    while True:
+        time.sleep(2)
+        pin = Pin(28, Pin.OUT, Pin.PULL_DOWN)
+        sensor = DHT11(pin)
+        t  = (sensor.temperature)
+        h = (sensor.humidity)
+        print(t)
+        print(h)

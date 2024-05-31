@@ -1,7 +1,5 @@
 # TODO: 
 # TEST BLE COMMUNICATION
-# MAYBE? ADD LED FOR ALARM MODE (BLINKING)
-# ADD RESET SYSTEM?
 
 '''
 Imports
@@ -49,11 +47,20 @@ SIM_TX = 16
 TEMP         = 28
 STOP_START   = 27
 PAUSE_RESUME = 26
-BUZZER       = 12
+BUZZER       = 22
+LED          = 12
 
 # User data #
 NUMBER = ""
 WEIGHT = 0.0
+
+# Time constants #
+DT_RFID = 1000
+DT_GPS = 1000
+DT_BUTTON = 500
+DT_BUZZER = 1000
+DT_TRACKER = 1000
+DT_RST = 5000
 
 # Other constants #
 CARD_ID = 3186880355
@@ -226,7 +233,8 @@ def write_data_SD (vfs, data):
     uos.mount(vfs, "/sd")
     i = 0
     for file in uos.ilistdir("/sd"):
-        i = max(i, int(file[0].split("_")[1].split(".")[0]))
+        if file[0].split(".")[-1] == "txt":
+            i = max(i, int(file[0].split("_")[1].split(".")[0]))
     i += 1
     if data:
         try:
@@ -243,20 +251,27 @@ def write_data_SD (vfs, data):
 def read_data_SD (vfs):
     data = []
     tmp = []
+    if is_SD_empty(vfs):
+        return data
     uos.mount(vfs, "/sd")
     for file in uos.ilistdir("/sd"):
-        with open("/sd/" + file[0], "r") as f:
-            tmp.append(file[0])
-            tmp.append(f.read())
-            data.append(tmp)
-            tmp = []
+        if file[0].split(".")[-1] == "txt":
+            with open("/sd/" + file[0], "r") as f:
+                tmp.append(file[0])
+                tmp.append(f.read())
+                data.append(tmp)
+                tmp = []
             
     uos.umount("/sd")    
     return data
 
 def is_SD_empty (vfs):
     uos.mount(vfs, "/sd")
-    if len(list(uos.ilistdir("/sd"))) == 0:
+    count = 0
+    for file in uos.ilistdir("/sd"):
+        if file[0].split(".")[-1] == "txt":
+            count += 1
+    if count == 0:
         uos.umount("/sd")
         return True
     uos.umount("/sd")
@@ -295,13 +310,13 @@ def send_sms (sim800l, message, number):
     
 def button_pressed (button, t_current, t_button):
     if button.value() == 0:
-        if t_current - t_button > 100:
+        if t_current - t_button > DT_BUTTON:
             return True
     return False
 
 def rfid_read (rfid, CARD_ID, t_current=None, t_rfid=None):
     if t_current and t_rfid:
-        flag = (t_current - t_rfid > 500)    # Debouncing
+        flag = (t_current - t_rfid > DT_RFID)    # Debouncing
     else:
         flag = True
     if flag:
@@ -318,19 +333,27 @@ def rfid_read (rfid, CARD_ID, t_current=None, t_rfid=None):
 def check_movement (lat0, lon0, lat1, lon1):
     return (distance(lat0, lon0, lat1, lon1) > ALARM_DISTANCE)
 
+def reset_device (vfs):
+    uos.mount(vfs, "/sd")
+    for file in uos.ilistdir("/sd"):
+        if file[0].split(".")[-1] == "txt":
+            uos.remove("/sd/" + file[0])
+    uos.umount("/sd")
+    uos.remove("/user_data.json")
+
+
 # Main
 
-user_data_flag = False
 try:
-    with open("user_data.json", "r") as f:
+    with open("/user_data.json", "r") as f:
         loaded_user_data = json.load(f)
         NUMBER = loaded_user_data["number"]
         WEIGHT = loaded_user_data["weight"]
         user_data_flag = True
 except:
-    pass
+    user_data_flag = False
 
-# States: no_info, idle, sending, running, pause, saving, alarm_idle, alarm_active
+# States: no_info, idle, sending, running, paused, saving, alarm_idle, alarm_active
 state = ('no_info' if not user_data_flag else 'idle')
 
 # Initialize peripherals
@@ -343,8 +366,11 @@ sp = init_BLE()
 sim_card = init_SIM800L()
 stop_start = Pin(STOP_START, Pin.IN, Pin.PULL_UP)
 pause_resume = Pin(PAUSE_RESUME, Pin.IN, Pin.PULL_UP)
-buzzer = Pin(BUZZER, Pin.OUT, Pin.PULL_DOWN, 0)
+# buzzer = Pin(BUZZER, Pin.OUT, Pin.PULL_DOWN)
+# buzzer.value(0)
 temp = dht11.DHT11(Pin(TEMP, Pin.OUT, Pin.PULL_DOWN))
+led = Pin(LED, Pin.OUT)
+led.value(0)
 
 # Current GPS data
 lat = lon = speed = 0.0
@@ -357,12 +383,13 @@ travel_distance = 0.0
 max_speed = 0.0
 coordinates = []
 alarm_lat = alarm_lon = 0.0
+temperature = 0.0
 
 # Data list format: [start date, start time, finish date, finish time, elapsed time, distance, max speed, calories, coordinates]
 data_list = []
 
 # Manage debouncing and periodic data updates
-t_rfid = t_gps = t_ss_button = t_pr_button = t_buzzer = t_tracker = 0
+t_rfid = t_gps = t_ss_button = t_pr_button = t_buzzer = t_tracker = t_rst = 0
 t_current = 0
 
 # Manage pausable chronometer
@@ -391,15 +418,27 @@ while True:
             state = 'idle'
 
     elif state == 'idle':
+        if pause_resume.value() == 0:
+            if t_current - t_rst > DT_RST:
+                reset_device(vfs)
+                user_data_flag = False
+                state = 'no_info'
+                continue
+        else:
+            t_rst = time.ticks_ms()
+
         if is_SD_empty(vfs):
             sync_flag = True
         else:
             sync_flag = False
-            if sp.is_connected():
-                ble_flag = True
-                state = 'sending'
-            else:
-                ble_flag = False
+
+        if sp.is_connected():
+            ble_flag = True
+        else:
+            ble_flag = False
+
+        if ble_flag and not sync_flag:
+            state = 'sending'
 
         if gps_data:
             gps_flag = True
@@ -415,9 +454,13 @@ while True:
                 alarm_lat = lat
                 alarm_lon = lon
                 send_sms(sim_card, "Alarm mode turned on at " + str(lat) + "," + str(lon), NUMBER)
+                led.value(1)
                 state = 'alarm_idle'
         else:
             gps_flag = False
+
+        if ble_flag and not sync_flag:
+            state = 'sending'
 
         lcd_idle(lcd, sync_flag, ble_flag, gps_flag)
 
@@ -425,15 +468,31 @@ while True:
         lcd_sending(lcd, False)
         time.sleep(1)
         data = read_data_SD(vfs)
+        uos.mount(vfs, "/sd")
         for d in data:
             if send_data_BLE(sp, d[1]):
                 uos.remove("/sd/" + d[0])
+        uos.umount("/sd")
         if is_SD_empty(vfs):
             lcd_sending(lcd, True)
             time.sleep(1)
             state = 'idle'
 
     elif state == 'running' or state == 'paused':
+
+        temp.measure()
+        tmp = temp.temperature
+        if tmp != -1:
+            temperature = tmp
+
+        # if t_current - t_temp > 5000:
+        #     t_temp = time.ticks_ms()
+        #     tmp = temp.temperature
+        #     if tmp != -1:
+        #         temperature = tmp
+
+        if state == 'paused':
+            start_time = time.time()
 
         sec_counter, start_time = incr_sec_counter(sec_counter, start_time)
 
@@ -448,7 +507,10 @@ while True:
             data_list.append(date) # Save finish date (last received)
             data_list.append(clock) # Save finish time (last received)
             data_list.append(chronometer_str(chronometer)) # Save elapsed time
-            data_list.append(str(round(travel_distance,1))) # Save distance
+            if travel_distance >= 1.0:
+                data_list.append(str(round(travel_distance,1))) # Save distance
+            else:
+                data_list.append(str(round(travel_distance*1000)))
             data_list.append(str(round(max_speed,1))) # Save max speed
             data_list.append(str(round(calories,1))) # Save calories
             for coord in coordinates:
@@ -462,13 +524,13 @@ while True:
         # Check if button was pressed to pause/resume
         if button_pressed (pause_resume, t_current, t_pr_button):
             t_pr_button = time.ticks_ms()
-            state = 'pause' if state == 'running' else 'running'    # Update state
+            state = 'paused' if state == 'running' else 'running'    # Update state
 
         if state == 'running':
 
             chronometer = calculate_time(sec_counter)
 
-            if t_current - t_gps > 1000:    # Update from gps every second
+            if t_current - t_gps > DT_GPS:    # Update from gps every second
                 t_gps = time.ticks_ms()
                 if gps_data:
                     if coordinates:
@@ -479,21 +541,22 @@ while True:
                         prev_lon = lon
                     # Save data to list
                     coordinates.append(str(lat) + "," + str(lon))
-                    travel_distance += distance(prev_lat, prev_lon, lat, lon)
+                    travel_distance += distance(float(prev_lat), float(prev_lon), float(lat), float(lon))
 
-                    if gps_data[2] > max_speed:
-                        max_speed = gps_data[2]
+                    if speed > max_speed:
+                        max_speed = speed
                     
                     calories += calculate_calories(WEIGHT, speed*0.6213711922)
 
         else:
-            start_time = time.time()
+            pass
 
         if travel_distance >= 1.0:
             dist_unit = 'km'
         else:
             dist_unit = 'm'
-        lcd_running_paused(lcd, speed, chronometer, date, clock, calories, temp.temperature, travel_distance, gps_flag, dist_unit)
+        
+        lcd_running_paused(lcd, speed, chronometer, date, clock, calories, temperature, travel_distance, gps_flag, dist_unit)
 
 
     elif state == 'saving':
@@ -513,22 +576,23 @@ while True:
 
         if rfid_read(rfid, CARD_ID, t_current, t_rfid):
             t_rfid = time.ticks_ms()
-            buzzer.off()
+            # buzzer.off()
             send_sms(sim_card, "Alarm deactivated at " + str(lat) + "," + str(lon), NUMBER)
+            led.value(0)
             state = 'idle'
         
         if state == 'alarm_idle':
-            if gps_data and check_movement(alarm_lat, alarm_lon, gps_data[0], gps_data[1]):
+            if check_movement(float(alarm_lat), float(alarm_lon), float(lat), float(lon)):
                 send_sms(sim_card, "Alarm activated at " + str(lat) + "," + str(lon), NUMBER)
                 state = 'alarm_active'
         else:
-            if t_current - t_buzzer > 1000:
-                t_buzzer = time.ticks_ms()
-                if buzzer.value() == 0:
-                    buzzer.on()
-                else:
-                    buzzer.off()
-            if t_current - t_tracker > 1000:
+            # if t_current - t_buzzer > 1000:
+            #     t_buzzer = time.ticks_ms()
+            #     if buzzer.value() == 0:
+            #         buzzer.on()
+            #     else:
+            #         buzzer.off()
+            if t_current - t_tracker > DT_TRACKER:
                 t_tracker = time.ticks_ms()
                 if gps_data:
                     send_sms(sim_card, "Current location: " + str(lat) + "," + str(lon), NUMBER)

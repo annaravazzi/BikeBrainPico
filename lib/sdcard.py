@@ -30,7 +30,7 @@ from micropython import const
 import time
  
  
-_CMD_TIMEOUT = const(1000)
+_CMD_TIMEOUT = const(10000)
  
 _R1_IDLE_STATE = const(1 << 0)
 # R1_ERASE_RESET = const(1 << 1)
@@ -308,7 +308,7 @@ import uos
 
 if __name__ == '__main__':
     # Assign chip select (CS) pin (and start it high)
-    cs = machine.Pin(17, machine.Pin.OUT)
+    cs = machine.Pin(5, machine.Pin.OUT)
     
     # Intialize SPI peripheral (start with 1 MHz)
     spi = machine.SPI(0,
@@ -317,9 +317,9 @@ if __name__ == '__main__':
                     phase=0,
                     bits=8,
                     firstbit=machine.SPI.MSB,
-                    sck=machine.Pin(18),
-                    mosi=machine.Pin(19),
-                    miso=machine.Pin(16))
+                    sck=machine.Pin(6),
+                    mosi=machine.Pin(7),
+                    miso=machine.Pin(4))
     
     # Initialize SD card
     sd = SDCard(spi, cs)
