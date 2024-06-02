@@ -11,7 +11,7 @@ import lib.sdcard as sdcard
 import lib.sim800l as sim800l
 from lib.ble_simple_peripheral import BLESimplePeripheral
 import bluetooth
-from machine import Pin, SPI, UART
+from machine import Pin, SPI, UART, PWM
 import time
 import uos
 import ujson as json
@@ -55,17 +55,19 @@ NUMBER = ""
 WEIGHT = 0.0
 
 # Time constants #
-DT_RFID = 1000
+DT_RFID = 2000
 DT_GPS = 1000
+DT_COORDS = 10000
 DT_BUTTON = 500
-DT_BUZZER = 1000
-DT_TRACKER = 1000
+DT_BUZZER_ON = 500
+DT_BUZZER_OFF = 200
+DT_TRACKER = 10000
 DT_RST = 5000
 
 # Other constants #
 CARD_ID = 3186880355
-BLE_PACKET_SIZE = 20
-ALARM_DISTANCE = 0.0001
+BLE_PACKET_SIZE = 508
+ALARM_DISTANCE = 10.0    # meters
 
 '''Functions'''
 
@@ -137,18 +139,20 @@ def lcd_sending (lcd, synced):
         lcd.text('Done', 0, 30, 1)
     lcd.show()
 
-def lcd_running_paused (lcd, speed, chronometer, date, current_time, calories, temp, dist, gps_connected, dist_unit='km'):
+def lcd_running_paused (lcd, speed, chronometer, date, current_time, calories, temp, dist, gps_connected):
     lcd.fill(0)
     lcd.text(current_time, 0, 0, 1)
     lcd.text(date, 48, 0, 1)
     lcd.text(chronometer_str(chronometer), 0, 10, 1)
-    if dist_unit == 'km':
+    if dist >= 1.0:
         lcd.text(str(round(dist,1)) + 'km', 0, 20, 1)
     else:
-        lcd.text(str(dist*1000) + 'm', 0, 20, 1)
+        lcd.text(str(round(dist*1000)) + 'm', 0, 20, 1)
     lcd.text(str(round(calories,1)) + 'kcal', 0, 30, 1)
     lcd.text(str(round(speed,1)) + 'km/h', 0, 40, 1)
-    lcd.text(str(round(temp,1)) + '°C', 88, 50, 1)
+    lcd.text(str(round(temp)), 88, 50, 1)
+    lcd.ellipse(105, 50, 1, 1, 1, False)
+    lcd.text('C', 110, 50, 1)
     if not gps_connected:
         lcd.text('No signal', 0, 50, 1)
     lcd.show()
@@ -331,7 +335,7 @@ def rfid_read (rfid, CARD_ID, t_current=None, t_rfid=None):
     return False
 
 def check_movement (lat0, lon0, lat1, lon1):
-    return (distance(lat0, lon0, lat1, lon1) > ALARM_DISTANCE)
+    return (distance(lat0, lon0, lat1, lon1)*1000 > ALARM_DISTANCE)
 
 def reset_device (vfs):
     uos.mount(vfs, "/sd")
@@ -366,8 +370,10 @@ sp = init_BLE()
 sim_card = init_SIM800L()
 stop_start = Pin(STOP_START, Pin.IN, Pin.PULL_UP)
 pause_resume = Pin(PAUSE_RESUME, Pin.IN, Pin.PULL_UP)
-# buzzer = Pin(BUZZER, Pin.OUT, Pin.PULL_DOWN)
-# buzzer.value(0)
+buzzer = PWM(Pin(BUZZER))
+buzzer.freq(200)
+buzzer.duty_u16(0)
+buzzer_state = False
 temp = dht11.DHT11(Pin(TEMP, Pin.OUT, Pin.PULL_DOWN))
 led = Pin(LED, Pin.OUT)
 led.value(0)
@@ -389,7 +395,7 @@ temperature = 0.0
 data_list = []
 
 # Manage debouncing and periodic data updates
-t_rfid = t_gps = t_ss_button = t_pr_button = t_buzzer = t_tracker = t_rst = 0
+t_rfid = t_gps = t_coords = t_ss_button = t_pr_button = t_buzzer = t_tracker = t_rst = 0
 t_current = 0
 
 # Manage pausable chronometer
@@ -437,8 +443,8 @@ while True:
         else:
             ble_flag = False
 
-        if ble_flag and not sync_flag:
-            state = 'sending'
+        # if ble_flag and not sync_flag:
+        #     state = 'sending'
 
         if gps_data:
             gps_flag = True
@@ -484,12 +490,6 @@ while True:
         tmp = temp.temperature
         if tmp != -1:
             temperature = tmp
-
-        # if t_current - t_temp > 5000:
-        #     t_temp = time.ticks_ms()
-        #     tmp = temp.temperature
-        #     if tmp != -1:
-        #         temperature = tmp
 
         if state == 'paused':
             start_time = time.time()
@@ -540,7 +540,6 @@ while True:
                         prev_lat = lat
                         prev_lon = lon
                     # Save data to list
-                    coordinates.append(str(lat) + "," + str(lon))
                     travel_distance += distance(float(prev_lat), float(prev_lon), float(lat), float(lon))
 
                     if speed > max_speed:
@@ -548,15 +547,14 @@ while True:
                     
                     calories += calculate_calories(WEIGHT, speed*0.6213711922)
 
+            if t_current - t_coords > DT_COORDS:
+                t_coords = time.ticks_ms()
+                if gps_data:
+                    coordinates.append(str(lat) + "," + str(lon))
         else:
             pass
-
-        if travel_distance >= 1.0:
-            dist_unit = 'km'
-        else:
-            dist_unit = 'm'
         
-        lcd_running_paused(lcd, speed, chronometer, date, clock, calories, temperature, travel_distance, gps_flag, dist_unit)
+        lcd_running_paused(lcd, speed, chronometer, date, clock, calories, temperature, travel_distance, gps_flag)
 
 
     elif state == 'saving':
@@ -576,138 +574,48 @@ while True:
 
         if rfid_read(rfid, CARD_ID, t_current, t_rfid):
             t_rfid = time.ticks_ms()
-            # buzzer.off()
+            buzzer.duty_u16(0)
+            buzzer_state = False
             send_sms(sim_card, "Alarm deactivated at " + str(lat) + "," + str(lon), NUMBER)
             led.value(0)
             state = 'idle'
+            continue
         
         if state == 'alarm_idle':
             if check_movement(float(alarm_lat), float(alarm_lon), float(lat), float(lon)):
                 send_sms(sim_card, "Alarm activated at " + str(lat) + "," + str(lon), NUMBER)
                 state = 'alarm_active'
+                buzzer.duty_u16(1000)
+                buzzer_state = True
+                led.value(1)
         else:
-            # if t_current - t_buzzer > 1000:
-            #     t_buzzer = time.ticks_ms()
-            #     if buzzer.value() == 0:
-            #         buzzer.on()
-            #     else:
-            #         buzzer.off()
+            # if buzzer_state:
+            #     time.sleep(0.5)
+            #     buzzer.duty_u16(0)
+            #     buzzer_state = False
+            #     led.value(0)
+            # else:
+            #     time.sleep(0.2)
+            #     buzzer.duty_u16(1000)
+            #     buzzer_state = True
+            #     led.value(1)
+
+            if buzzer_state:
+                if t_current - t_buzzer > DT_BUZZER_ON:
+                    t_buzzer = time.ticks_ms()
+                    buzzer.duty_u16(0)
+                    buzzer_state = False
+                    led.value(0)
+            else:
+                if t_current - t_buzzer > DT_BUZZER_OFF:
+                    t_buzzer = time.ticks_ms()
+                    buzzer.duty_u16(1000)
+                    buzzer_state = True
+                    led.value(1)
+
             if t_current - t_tracker > DT_TRACKER:
                 t_tracker = time.ticks_ms()
                 if gps_data:
                     send_sms(sim_card, "Current location: " + str(lat) + "," + str(lon), NUMBER)
     else:
         pass
-
-# while True:
-
-#     if state == 'idle':
-#         lcd.fill(0)
-#         lcd.text('Press button', 0, 0, 1)
-#         lcd.text('to start', 0, 10, 1)
-#         lcd.show()
-
-#     # Check if button was pressed to start running
-#     if button.value() == 0:
-        
-#         send_sms(sim_card, "Program started running", NUMBER)
-
-#         t_button = time.ticks_ms()  # Debouncing
-
-#         # Initialize chronometer
-#         start_time = time.time()
-#         chronometer = (0, 0, 0)
-#         sec_counter = 0
-
-#         n += 1  # Record number
-#         state = 'running'   # Update state
-
-#     # Running loop
-#     while state == 'running' or state == 'paused':
-#         t_current = time.ticks_ms()
-
-#         # Update chronometer
-#         sec_counter, start_time = incr_sec_counter(sec_counter, start_time)
-
-#         # Check if button was pressed to stop running
-#         if button.value() == 0:
-#             if t_current - t_button > 500:  # Debouncing
-#                 t_button = time.ticks_ms()
-#                 state = 'saving'    # Update state
-#                 send_sms(sim_card, "Program stopped running", NUMBER)
-#                 break
-
-#         if t_current - t_rfid > 500:    # Debouncing
-#             t_rfid = time.ticks_ms()
-#             # Read RFID card to pause/resume
-#             if rfid_read(rfid, CARD_ID):
-#                 state = ('running' if state == 'paused' else 'paused')  # Update state
-
-#         if state == 'running':
-#             led.value(0)
-
-#             chronometer = calculate_time(sec_counter)
-#             data = micropyGPS.get_data(gps, gps_module)
-#             if data:
-#                 date = gps.date_string(formatting='s_dmy')
-#                 current_time = gps.time_string()
-
-#             # Read GPS data
-#             if t_current - t_gps > 1000:    # Update GPS data every second
-#                 t_gps = time.ticks_ms()
-#                 if data:                    
-#                     # Save GPS data
-#                     lat = data[0]
-#                     lon = data[1]
-#                     speed = data[2]
-#                     gps_data.append(str(lat) + "," + str(lon) + "," + str(speed))
-
-#             update_lcd(lcd, lat, lon, speed, chronometer, date, current_time)
-
-#         elif state == 'paused':
-#             led.value(1)
-#             start_time = time.time()
-#             data = micropyGPS.get_data(gps, gps_module)
-#             if data:
-#                 date = gps.date_string(formatting='s_dmy')
-#                 current_time = gps.time_string()
-#                 update_lcd(lcd, lat, lon, speed, chronometer, date, current_time)
-
-    
-#     if state == 'saving':
-#         led.value(0)
-
-#         gps_data.insert(0, str(n))
-#         gps_data.insert(1, chronometer_str(chronometer))
-
-#         lcd.fill(0)
-#         lcd.text('Saving...', 0, 0, 1)
-#         lcd.show()
-#         time.sleep(1)
-
-#         # Save data in SD card
-#         gps_data = write_data_SD(vfs, gps_data, n)
-
-#         lcd.fill(0)
-#         lcd.text('Send to phone?', 0, 0, 1)
-#         lcd.text('Press button', 0, 10, 1)
-#         lcd.show()
-
-#         while button.value() == 1:
-#             pass
-
-#         lcd.fill(0)
-#         lcd.text('Sending...', 0, 0, 1)
-#         lcd.show()
-#         time.sleep(1)
-        
-#         if send_data_BLE(sp, read_data_SD(vfs, n)):
-#             lcd.text('Data sent', 0, 10, 1)
-#             lcd.show()
-#         else:
-#             lcd.text('No connection', 0, 10, 1)
-#             lcd.show()
-
-#         time.sleep(1)
-
-#         state = 'idle'

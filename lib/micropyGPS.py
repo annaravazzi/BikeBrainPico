@@ -908,8 +908,8 @@ if __name__ == "__main__":
     #     return str(data)
 
     while True:
-        # print(gps_module.read())
-        # utime.sleep_ms(1000)
+        print(gps_module.read())
+        utime.sleep_ms(1000)
         length = gps_module.any()
         if length > 0:
             data = gps_module.read(length)

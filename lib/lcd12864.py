@@ -84,17 +84,20 @@ if __name__ == '__main__':
     print(fbuf._spi)
     fbuf.fill(0)
 
-    while True:
-        fbuf.fill(0)
-        fbuf.text('Hello!', 32, 32, 1)
-        fbuf.show()
-        time.sleep(1)
-        fbuf.fill(0)
-        fbuf.text('world!', 32, 32, 1)
-        fbuf.show()
-        time.sleep(1)
+    # while True:
+    #     fbuf.fill(0)
+    #     fbuf.text('Hello!', 32, 32, 1)
+    #     fbuf.show()
+    #     time.sleep(1)
+    #     fbuf.fill(0)
+    #     fbuf.text('world!', 32, 32, 1)
+    #     fbuf.show()
+    #     time.sleep(1)
     
-    # fbuf.text('Hello world!', 0, 0, 1)
+    fbuf.text('Hello world!', 0, 0, 1)
+    fbuf.text('20', 0, 16, 1)
+    fbuf.ellipse(17, 16, 1, 1, 1, False)
+    fbuf.show()
     # fbuf.ellipse(64, 31, 32, 16, 1, True)
     # fbuf.ellipse(64, 31, 16, 32, 1, True)
     
