@@ -1,6 +1,3 @@
-# TODO: 
-# TEST BLE COMMUNICATION
-
 '''
 Imports
 '''
@@ -65,8 +62,9 @@ DT_TRACKER = 10000
 DT_RST = 5000
 
 # Other constants #
+SMS_HASH = ""
 CARD_ID = 3186880355
-BLE_PACKET_SIZE = 508
+BLE_PACKET_SIZE = 20
 ALARM_DISTANCE = 10.0    # meters
 
 '''Functions'''
@@ -310,7 +308,7 @@ def receive_data_BLE (sp):
 def send_sms (sim800l, message, number):
     # send sms
     sim800l.send_command("AT+CMGS=\"" + number + "\"")
-    sim800l.uart.write(message + chr(26))
+    sim800l.uart.write(message + '\n\n' + SMS_HASH + chr(26))
     
 def button_pressed (button, t_current, t_button):
     if button.value() == 0:
@@ -381,6 +379,7 @@ led.value(0)
 # Current GPS data
 lat = lon = speed = 0.0
 date = clock = ""
+prev_lat = prev_lon = ""
 
 # Registered data
 start_date = start_clock = finish_date = finish_clock = ""
@@ -443,13 +442,10 @@ while True:
         else:
             ble_flag = False
 
-        # if ble_flag and not sync_flag:
-        #     state = 'sending'
-
         if gps_data:
             gps_flag = True
             if stop_start.value() == 0:
-                send_sms(sim_card, "Exercise started at " + str(lat) + "," + str(lon), NUMBER)
+                send_sms(sim_card, "Exercise started (" + str(lat) + "," + str(lon) + ")", NUMBER)
                 t_ss_button = time.ticks_ms()
                 start_time = time.time()
                 data_list.append(date) # Save start date
@@ -459,7 +455,7 @@ while True:
                 t_rfid = time.ticks_ms()
                 alarm_lat = lat
                 alarm_lon = lon
-                send_sms(sim_card, "Alarm mode turned on at " + str(lat) + "," + str(lon), NUMBER)
+                send_sms(sim_card, "Alarm mode on (" + str(lat) + "," + str(lon) + ")", NUMBER)
                 led.value(1)
                 state = 'alarm_idle'
         else:
@@ -479,7 +475,7 @@ while True:
             if send_data_BLE(sp, d[1]):
                 uos.remove("/sd/" + d[0])
         uos.umount("/sd")
-        if is_SD_empty(vfs):
+        if is_SD_empty(vfs) and send_data_BLE(sp, '*'):
             lcd_sending(lcd, True)
             time.sleep(1)
             state = 'idle'
@@ -504,22 +500,23 @@ while True:
         # Check if button was pressed to stop running
         if button_pressed (stop_start, t_current, t_ss_button):
             t_button = time.ticks_ms()
-            data_list.append(date) # Save finish date (last received)
-            data_list.append(clock) # Save finish time (last received)
-            data_list.append(chronometer_str(chronometer)) # Save elapsed time
-            if travel_distance >= 1.0:
-                data_list.append(str(round(travel_distance,1))) # Save distance
-            else:
-                data_list.append(str(round(travel_distance*1000)))
-            data_list.append(str(round(max_speed,1))) # Save max speed
-            data_list.append(str(round(calories,1))) # Save calories
+            data_list.append(date) # Save finish date (day/month/year)
+            data_list.append(clock) # Save finish time (hour:minute)
+            data_list.append(chronometer_str(chronometer)) # Save elapsed time (hours:minutes:seconds)
+            data_list.append(str(round(travel_distance*1000))) # Save distance (m)
+            data_list.append(str(round(max_speed,1))) # Save max speed (km/h)
+            data_list.append(str(round(calories,1))) # Save calories (kcal)
             for coord in coordinates:
                 data_list.append(coord) # Save coordinates
             coordinates = []
             chronometer = (0, 0, 0)
             sec_counter = 0
+            prev_lat = prev_lon = ""
+            travel_distance = 0.0
+            max_speed = 0.0
+            calories = 0.0
             state = 'saving'    # Update state
-            send_sms(sim_card, "Exercise stopped at " + str(lat) + "," + str(lon), NUMBER)
+            send_sms(sim_card, "Exercise stopped (" + str(lat) + "," + str(lon) + ")", NUMBER)
         
         # Check if button was pressed to pause/resume
         if button_pressed (pause_resume, t_current, t_pr_button):
@@ -532,25 +529,26 @@ while True:
 
             if t_current - t_gps > DT_GPS:    # Update from gps every second
                 t_gps = time.ticks_ms()
-                if gps_data:
-                    if coordinates:
-                        prev_lat = coordinates[-1].split(",")[0]
-                        prev_lon = coordinates[-1].split(",")[1]
-                    else:
-                        prev_lat = lat
-                        prev_lon = lon
-                    # Save data to list
-                    travel_distance += distance(float(prev_lat), float(prev_lon), float(lat), float(lon))
 
-                    if speed > max_speed:
-                        max_speed = speed
-                    
-                    calories += calculate_calories(WEIGHT, speed*0.6213711922)
+                if prev_lat == "" and prev_lon == "":
+                    prev_lat = lat
+                    prev_lon = lon
 
+                travel_distance += distance(float(prev_lat), float(prev_lon), float(lat), float(lon))
+
+                if speed > max_speed:
+                    max_speed = speed
+                
+                calories += calculate_calories(WEIGHT, speed*0.6213711922)
+
+                prev_lat = lat
+                prev_lon = lon
+                
             if t_current - t_coords > DT_COORDS:
                 t_coords = time.ticks_ms()
                 if gps_data:
                     coordinates.append(str(lat) + "," + str(lon))
+
         else:
             pass
         
@@ -576,29 +574,19 @@ while True:
             t_rfid = time.ticks_ms()
             buzzer.duty_u16(0)
             buzzer_state = False
-            send_sms(sim_card, "Alarm deactivated at " + str(lat) + "," + str(lon), NUMBER)
+            send_sms(sim_card, "Alarm off (" + str(lat) + "," + str(lon) + ")", NUMBER)
             led.value(0)
             state = 'idle'
             continue
         
         if state == 'alarm_idle':
             if check_movement(float(alarm_lat), float(alarm_lon), float(lat), float(lon)):
-                send_sms(sim_card, "Alarm activated at " + str(lat) + "," + str(lon), NUMBER)
+                send_sms(sim_card, "Alarm triggered (" + str(lat) + "," + str(lon) + ")", NUMBER)
                 state = 'alarm_active'
                 buzzer.duty_u16(1000)
                 buzzer_state = True
                 led.value(1)
         else:
-            # if buzzer_state:
-            #     time.sleep(0.5)
-            #     buzzer.duty_u16(0)
-            #     buzzer_state = False
-            #     led.value(0)
-            # else:
-            #     time.sleep(0.2)
-            #     buzzer.duty_u16(1000)
-            #     buzzer_state = True
-            #     led.value(1)
 
             if buzzer_state:
                 if t_current - t_buzzer > DT_BUZZER_ON:
@@ -616,6 +604,6 @@ while True:
             if t_current - t_tracker > DT_TRACKER:
                 t_tracker = time.ticks_ms()
                 if gps_data:
-                    send_sms(sim_card, "Current location: " + str(lat) + "," + str(lon), NUMBER)
+                    send_sms(sim_card, "Current location: (" + str(lat) + "," + str(lon) + ")", NUMBER)
     else:
         pass

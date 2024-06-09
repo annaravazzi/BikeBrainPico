@@ -14,23 +14,39 @@ print(ble.config('mtu'))
 
 def send_data_BLE (sp, data):
     data_bytes = bytes(data, 'utf-8')
-    if sp.is_connected():
-        sp.send(data_bytes)
-        return True
-    return False
+    num_bytes = len(data_bytes)
+    packets = [data_bytes[i:i+20] for i in range(0, num_bytes, 20)]
+    for packet in packets:
+        if sp.is_connected():
+            sp.send(packet)
+        else:
+            return False
+    return True
 
-data = ""
+# def send_data_BLE (sp, data):
+#     data_bytes = bytes(data, 'utf-8')
+#     if sp.is_connected():
+#         sp.send(data_bytes)
+#         return True
+#     return False
+
+data1 = ""
 for i in range(206):
-    data += str(i)
+    data1 += str(i)
+data1 += "$"
 
-print(len(data.encode('utf-8')))
+data2 = ""
+for i in range(206, 412):
+    data2 += str(i)
+data2 += "$"
 
 while True:
     if sp.is_connected():
         input()
-        if send_data_BLE(sp, data):
-            sleep(1)
-            ble.gap_disconnect(64)
+        send_data_BLE(sp, data1)
+        send_data_BLE(sp, data2)
+        send_data_BLE(sp, "*")
+            # ble.gap_disconnect(64)
 
 # led = Pin('LED', Pin.OUT)
 # led.value(0)

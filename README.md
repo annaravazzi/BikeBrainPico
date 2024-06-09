@@ -12,17 +12,23 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 
 ## Hardware
 
-- Raspberry Pi Pico W (RP2040)
-- LCD Screen 128x64 ST7920
-- RFID module MFRC522
-- MicroSD card module
-- GPS module GY-NEO6MV2
-- GSM/GPRS SIM800L V2 module
-- MPU6050 accelerometer module
+- 1x Raspberry Pi Pico W (RP2040)
+- 1x LCD Screen 128x64 ST7920
+- 1x RFID module MFRC522
+- 1x MicroSD card module
+- 1x GPS module GY-NEO6MV2
+- 1x GSM/GPRS SIM800L V2 module
+- 1x DHT11 temperature sensor
+- 1x Active buzzer
+- 2x Push buttons
+- 1x LED
+- 3x Resistors (1k, 10k, 100)
+- 1x BC548 transistor
 
 ## Software
 
 - MicroPython v1.22.2
 - MicroPico VSCode extension
+- Various drivers for the modules (source is on top of each file)
 
-## Connections
+## Circuit
