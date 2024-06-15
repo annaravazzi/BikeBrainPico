@@ -4,7 +4,7 @@ Imports
 import lib.lcd12864 as lcd12864
 import lib.mfrc522 as mfrc522
 import lib.micropyGPS as micropyGPS
-import lib.sdcard as sdcard
+# import lib.sdcard as sdcard
 import lib.sim800l as sim800l
 from lib.ble_simple_peripheral import BLESimplePeripheral
 import bluetooth
@@ -32,11 +32,11 @@ RFID_RST  = 10
 # GPS
 GPS_TX = 8
 GPS_RX = 9
-# SD
-SD_SCK  = 6
-SD_MISO = 4
-SD_MOSI = 7
-SD_CS   = 5
+# # SD
+# SD_SCK  = 6
+# SD_MISO = 4
+# SD_MOSI = 7
+# SD_CS   = 5
 # SIM800L
 SIM_RX = 17
 SIM_TX = 16
@@ -86,11 +86,11 @@ def init_GPS ():
     gps = micropyGPS.MicropyGPS(time_zone)
     return gps_module, gps
 
-def init_SD ():
-    cs = Pin(SD_CS, Pin.OUT)
-    spi = SPI(0, baudrate=1000000, polarity=0, phase=0, bits=8, firstbit=SPI.MSB, sck=Pin(SD_SCK), mosi=Pin(SD_MOSI), miso=Pin(SD_MISO))
-    sd = sdcard.SDCard(spi, cs)
-    return sd
+# def init_SD ():
+#     cs = Pin(SD_CS, Pin.OUT)
+#     spi = SPI(0, baudrate=1000000, polarity=0, phase=0, bits=8, firstbit=SPI.MSB, sck=Pin(SD_SCK), mosi=Pin(SD_MOSI), miso=Pin(SD_MISO))
+#     sd = sdcard.SDCard(spi, cs)
+#     return sd
 
 def init_BLE (): 
     ble = bluetooth.BLE()
@@ -231,52 +231,91 @@ def chronometer_str (chronometer):
         seconds = "0" + seconds
     return hours + ":" + minutes + ":" + seconds
 
-def write_data_SD (vfs, data):
-    uos.mount(vfs, "/sd")
+# def write_data_SD (vfs, data):
+#     uos.mount(vfs, "/sd")
+#     i = 0
+#     for file in uos.ilistdir("/sd"):
+#         if file[0].split(".")[-1] == "txt":
+#             i = max(i, int(file[0].split("_")[1].split(".")[0]))
+#     i += 1
+#     if data:
+#         try:
+#             with open("/sd/data_" + str(i) + ".txt", "w") as f:
+#                 for line in data:
+#                     f.write(line + "\n")
+#                 f.write('$') # Conventioned end of file character
+#                 uos.umount("/sd")
+#             return True
+#         except:
+#             uos.umount("/sd")
+#             return False
+
+def write_data (data):
     i = 0
-    for file in uos.ilistdir("/sd"):
+    for file in uos.ilistdir():
         if file[0].split(".")[-1] == "txt":
             i = max(i, int(file[0].split("_")[1].split(".")[0]))
     i += 1
     if data:
         try:
-            with open("/sd/data_" + str(i) + ".txt", "w") as f:
+            with open("/data_" + str(i) + ".txt", "w") as f:
                 for line in data:
                     f.write(line + "\n")
                 f.write('$') # Conventioned end of file character
-                uos.umount("/sd")
             return True
         except:
-            uos.umount("/sd")
             return False
 
-def read_data_SD (vfs):
+# def read_data_SD (vfs):
+#     data = []
+#     tmp = []
+#     if is_SD_empty(vfs):
+#         return data
+#     uos.mount(vfs, "/sd")
+#     for file in uos.ilistdir("/sd"):
+#         if file[0].split(".")[-1] == "txt":
+#             with open("/sd/" + file[0], "r") as f:
+#                 tmp.append(file[0])
+#                 tmp.append(f.read())
+#                 data.append(tmp)
+#                 tmp = []
+            
+#     uos.umount("/sd")    
+#     return data
+
+def read_data ():
     data = []
     tmp = []
-    if is_SD_empty(vfs):
+    if is_flash_empty():
         return data
-    uos.mount(vfs, "/sd")
-    for file in uos.ilistdir("/sd"):
+    for file in uos.ilistdir():
         if file[0].split(".")[-1] == "txt":
-            with open("/sd/" + file[0], "r") as f:
+            with open("/" + file[0], "r") as f:
                 tmp.append(file[0])
                 tmp.append(f.read())
                 data.append(tmp)
-                tmp = []
-            
-    uos.umount("/sd")    
+                tmp = []  
     return data
 
-def is_SD_empty (vfs):
-    uos.mount(vfs, "/sd")
+# def is_SD_empty (vfs):
+#     uos.mount(vfs, "/sd")
+#     count = 0
+#     for file in uos.ilistdir("/sd"):
+#         if file[0].split(".")[-1] == "txt":
+#             count += 1
+#     if count == 0:
+#         uos.umount("/sd")
+#         return True
+#     uos.umount("/sd")
+#     return False
+
+def is_flash_empty ():
     count = 0
-    for file in uos.ilistdir("/sd"):
+    for file in uos.ilistdir():
         if file[0].split(".")[-1] == "txt":
             count += 1
     if count == 0:
-        uos.umount("/sd")
         return True
-    uos.umount("/sd")
     return False
 
 def send_data_BLE (sp, data):
@@ -337,12 +376,18 @@ def rfid_read (rfid, CARD_ID, t_current=None, t_rfid=None):
 def check_movement (lat0, lon0, lat1, lon1):
     return (distance(lat0, lon0, lat1, lon1)*1000 > ALARM_DISTANCE)
 
-def reset_device (vfs):
-    uos.mount(vfs, "/sd")
-    for file in uos.ilistdir("/sd"):
+# def reset_device (vfs):
+#     uos.mount(vfs, "/sd")
+#     for file in uos.ilistdir("/sd"):
+#         if file[0].split(".")[-1] == "txt":
+#             uos.remove("/sd/" + file[0])
+#     uos.umount("/sd")
+#     uos.remove("/user_data.json")
+
+def reset_device ():
+    for file in uos.ilistdir():
         if file[0].split(".")[-1] == "txt":
-            uos.remove("/sd/" + file[0])
-    uos.umount("/sd")
+            uos.remove("/" + file[0])
     uos.remove("/user_data.json")
 
 
@@ -364,8 +409,8 @@ state = ('no_info' if not user_data_flag else 'idle')
 # Initialize peripherals
 lcd = init_LCD()
 gps_module, gps = init_GPS()
-sd = init_SD()
-vfs = uos.VfsFat(sd)
+# sd = init_SD()
+# vfs = uos.VfsFat(sd)
 rfid = init_RFID()
 sp = init_BLE()
 sim_card = init_SIM800L()
@@ -427,14 +472,16 @@ while True:
     elif state == 'idle':
         if pause_resume.value() == 0:
             if t_current - t_rst > DT_RST:
-                reset_device(vfs)
+                # reset_device(vfs)
+                reset_device()
                 user_data_flag = False
                 state = 'no_info'
                 continue
         else:
             t_rst = time.ticks_ms()
 
-        if is_SD_empty(vfs):
+        # if is_SD_empty(vfs):
+        if is_flash_empty():
             sync_flag = True
         else:
             sync_flag = False
@@ -471,13 +518,16 @@ while True:
     elif state == 'sending':
         lcd_sending(lcd, False)
         time.sleep(1)
-        data = read_data_SD(vfs)
-        uos.mount(vfs, "/sd")
+        # data = read_data_SD(vfs)
+        data = read_data()
+        # uos.mount(vfs, "/sd")
         for d in data:
             if send_data_BLE(sp, d[1]):
-                uos.remove("/sd/" + d[0])
-        uos.umount("/sd")
-        if is_SD_empty(vfs) and send_data_BLE(sp, '*'):
+                # uos.remove("/sd/" + d[0])
+                uos.remove("/" + d[0])
+        # uos.umount("/sd")
+        # if is_SD_empty(vfs) and send_data_BLE(sp, '*'):
+        if is_flash_empty() and send_data_BLE(sp, '*'):
             lcd_sending(lcd, True)
             time.sleep(1)
             state = 'idle'
@@ -561,7 +611,8 @@ while True:
     elif state == 'saving':
         lcd_saving(lcd, False)
         time.sleep(1)
-        if write_data_SD(vfs, data_list):
+        # if write_data_SD(vfs, data_list):
+        if write_data(data_list):
             data_list = []
             state = 'idle'
         else:
