@@ -22,8 +22,8 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 - 1x Active buzzer
 - 2x Push buttons
 - 1x LED
-- 3x Resistors (1k, 10k, 100)
-- 1x BC548 transistor
+- 2x Resistors (10k, 100)
+- 1x Capacitor (1000uF)
 
 ## Software
 
@@ -32,3 +32,5 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 - Various drivers for the modules (source is on top of each file)
 
 ## Circuit
+
+![alt text](circuit.png)

@@ -8,7 +8,7 @@ import lib.sdcard as sdcard
 import lib.sim800l as sim800l
 from lib.ble_simple_peripheral import BLESimplePeripheral
 import bluetooth
-from machine import Pin, SPI, UART, PWM
+from machine import Pin, SPI, UART
 import time
 import uos
 import ujson as json
@@ -45,11 +45,12 @@ TEMP         = 28
 STOP_START   = 27
 PAUSE_RESUME = 26
 BUZZER       = 22
-LED          = 12
+LED          = 21
 
 # User data #
 NUMBER = ""
 WEIGHT = 0.0
+SMS_HASH = "#EOPBpWiEtOx"
 
 # Time constants #
 DT_RFID = 2000
@@ -62,7 +63,6 @@ DT_TRACKER = 10000
 DT_RST = 5000
 
 # Other constants #
-SMS_HASH = ""
 CARD_ID = 3186880355
 BLE_PACKET_SIZE = 20
 ALARM_DISTANCE = 10.0    # meters
@@ -143,11 +143,11 @@ def lcd_running_paused (lcd, speed, chronometer, date, current_time, calories, t
     lcd.text(date, 48, 0, 1)
     lcd.text(chronometer_str(chronometer), 0, 10, 1)
     if dist >= 1.0:
-        lcd.text(str(round(dist,1)) + 'km', 0, 20, 1)
+        lcd.text("dist: " + str(round(dist,1)) + 'km', 0, 20, 1)
     else:
-        lcd.text(str(round(dist*1000)) + 'm', 0, 20, 1)
-    lcd.text(str(round(calories,1)) + 'kcal', 0, 30, 1)
-    lcd.text(str(round(speed,1)) + 'km/h', 0, 40, 1)
+        lcd.text("dist: " + str(round(dist*1000)) + 'm', 0, 20, 1)
+    lcd.text("cal: " + str(round(calories,1)) + 'kcal', 0, 30, 1)
+    lcd.text("speed: " + str(round(speed,1)) + 'km/h', 0, 40, 1)
     lcd.text(str(round(temp)), 88, 50, 1)
     lcd.ellipse(105, 50, 1, 1, 1, False)
     lcd.text('C', 110, 50, 1)
@@ -243,7 +243,7 @@ def write_data_SD (vfs, data):
             with open("/sd/data_" + str(i) + ".txt", "w") as f:
                 for line in data:
                     f.write(line + "\n")
-                f.write('$') # End of file character
+                f.write('$') # Conventioned end of file character
                 uos.umount("/sd")
             return True
         except:
@@ -296,9 +296,11 @@ def save_user_data (data):
 
 def on_rx(data):
     string_data = data.decode('utf-8').rstrip()
-    global NUMBER, WEIGHT, user_data_flag
+    global NUMBER, WEIGHT, HASH, user_data_flag
+    print(string_data)
     NUMBER = string_data.split(",")[0]
     WEIGHT = float(string_data.split(",")[1])
+    #HASH = string_data.split(",")[2]
     user_data_flag = True
 
 def receive_data_BLE (sp):
@@ -318,7 +320,7 @@ def button_pressed (button, t_current, t_button):
 
 def rfid_read (rfid, CARD_ID, t_current=None, t_rfid=None):
     if t_current and t_rfid:
-        flag = (t_current - t_rfid > DT_RFID)    # Debouncing
+        flag = (t_current - t_rfid > DT_RFID)
     else:
         flag = True
     if flag:
@@ -351,6 +353,7 @@ try:
         loaded_user_data = json.load(f)
         NUMBER = loaded_user_data["number"]
         WEIGHT = loaded_user_data["weight"]
+        SMS_HASH = loaded_user_data["hash"]
         user_data_flag = True
 except:
     user_data_flag = False
@@ -360,17 +363,16 @@ state = ('no_info' if not user_data_flag else 'idle')
 
 # Initialize peripherals
 lcd = init_LCD()
-rfid = init_RFID()
 gps_module, gps = init_GPS()
 sd = init_SD()
 vfs = uos.VfsFat(sd)
+rfid = init_RFID()
 sp = init_BLE()
 sim_card = init_SIM800L()
 stop_start = Pin(STOP_START, Pin.IN, Pin.PULL_UP)
 pause_resume = Pin(PAUSE_RESUME, Pin.IN, Pin.PULL_UP)
-buzzer = PWM(Pin(BUZZER))
-buzzer.freq(200)
-buzzer.duty_u16(0)
+buzzer = Pin(Pin(BUZZER), Pin.OUT)
+buzzer.value(0)
 buzzer_state = False
 temp = dht11.DHT11(Pin(TEMP, Pin.OUT, Pin.PULL_DOWN))
 led = Pin(LED, Pin.OUT)
@@ -419,7 +421,7 @@ while True:
         lcd_no_info(lcd, sp.is_connected())
         receive_data_BLE(sp)
         if user_data_flag:
-            save_user_data({"number": NUMBER, "weight": WEIGHT})
+            save_user_data({"number": NUMBER, "weight": WEIGHT, "hash": SMS_HASH})
             state = 'idle'
 
     elif state == 'idle':
@@ -455,7 +457,7 @@ while True:
                 t_rfid = time.ticks_ms()
                 alarm_lat = lat
                 alarm_lon = lon
-                send_sms(sim_card, "Alarm mode on (" + str(lat) + "," + str(lon) + ")", NUMBER)
+                send_sms(sim_card, "Alarm on (" + str(lat) + "," + str(lon) + ")", NUMBER)
                 led.value(1)
                 state = 'alarm_idle'
         else:
@@ -517,6 +519,7 @@ while True:
             calories = 0.0
             state = 'saving'    # Update state
             send_sms(sim_card, "Exercise stopped (" + str(lat) + "," + str(lon) + ")", NUMBER)
+            continue
         
         # Check if button was pressed to pause/resume
         if button_pressed (pause_resume, t_current, t_pr_button):
@@ -563,6 +566,7 @@ while True:
             state = 'idle'
         else:
             lcd_saving(lcd, True)
+            time.sleep(1)
 
     elif state == 'alarm_idle' or state == 'alarm_active':
         if gps_data:
@@ -572,7 +576,7 @@ while True:
 
         if rfid_read(rfid, CARD_ID, t_current, t_rfid):
             t_rfid = time.ticks_ms()
-            buzzer.duty_u16(0)
+            buzzer.value(0)
             buzzer_state = False
             send_sms(sim_card, "Alarm off (" + str(lat) + "," + str(lon) + ")", NUMBER)
             led.value(0)
@@ -583,7 +587,7 @@ while True:
             if check_movement(float(alarm_lat), float(alarm_lon), float(lat), float(lon)):
                 send_sms(sim_card, "Alarm triggered (" + str(lat) + "," + str(lon) + ")", NUMBER)
                 state = 'alarm_active'
-                buzzer.duty_u16(1000)
+                buzzer.value(1)
                 buzzer_state = True
                 led.value(1)
         else:
@@ -591,13 +595,13 @@ while True:
             if buzzer_state:
                 if t_current - t_buzzer > DT_BUZZER_ON:
                     t_buzzer = time.ticks_ms()
-                    buzzer.duty_u16(0)
+                    buzzer.value(0)
                     buzzer_state = False
                     led.value(0)
             else:
                 if t_current - t_buzzer > DT_BUZZER_OFF:
                     t_buzzer = time.ticks_ms()
-                    buzzer.duty_u16(1000)
+                    buzzer.value(1)
                     buzzer_state = True
                     led.value(1)
 

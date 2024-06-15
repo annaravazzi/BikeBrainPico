@@ -338,5 +338,7 @@ if __name__ == '__main__':
         data = file.read()
         print(data)
 
+    uos.remove("/sd/test02.txt")
+    
     # Dismount filesystem
     uos.umount("/sd")
