@@ -65,7 +65,7 @@ DT_RST = 5000
 # Other constants #
 CARD_ID = 3186880355
 BLE_PACKET_SIZE = 20
-ALARM_DISTANCE = 10.0    # meters
+ALARM_DISTANCE = 5.0    # meters
 
 '''Functions'''
 
