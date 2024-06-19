@@ -22,7 +22,7 @@ Click [here](https://polarized-sunfish-007.notion.site/BikeBrain-1c0d6820db43487
 - 1x Active buzzer
 - 2x Push buttons
 - 1x LED
-- 2x Resistors (10k, 100)
+- 3x Resistors (10k, 100, 330)
 - 1x Capacitor (1000uF)
 
 ## Software
